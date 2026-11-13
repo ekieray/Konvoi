@@ -1,6 +1,8 @@
 package com.kangekie.konvoitouring
 
 import android.Manifest
+import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -24,6 +26,8 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var sharedPreferences: SharedPreferences
+
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -35,6 +39,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Inisialisasi SharedPreferences untuk penyimpanan lokal HP
+        sharedPreferences = getSharedPreferences("KonvoiPrefs", Context.MODE_PRIVATE)
+        
         checkLocationPermission()
 
         setContent {
@@ -48,7 +56,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    KonvoiApp()
+                    KonvoiApp(sharedPreferences)
                 }
             }
         }
@@ -72,10 +80,14 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun KonvoiApp() {
+fun KonvoiApp(prefs: SharedPreferences) {
     var selectedTab by remember { mutableStateOf(0) }
     var sosActive by remember { mutableStateOf(false) }
-    var activeRoomState by remember { mutableStateOf<String?>(null) }
+    
+    // Memuat state Room terakhir yang tersimpan di HP
+    var activeRoomState by remember { 
+        mutableStateOf(prefs.getString("ACTIVE_ROOM", null)) 
+    }
 
     Scaffold(
         topBar = {
@@ -134,7 +146,7 @@ fun KonvoiApp() {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("🚨 DARURAT: SOS DIAKTIFKAN!", fontWeight = FontWeight.Bold, color = Color.Red, fontSize = 18.sp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Sinyal darurat dan koordinat lokasi terakhir Anda telah diaktifkan.")
+                        Text("Sinyal darurat disiarkan untuk keamanan peserta konvoi.")
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(onClick = { sosActive = false }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) {
                             Text("Batalkan SOS")
@@ -143,7 +155,13 @@ fun KonvoiApp() {
                 }
             } else {
                 when (selectedTab) {
-                    0 -> RoomScreen(activeRoom = activeRoomState, onRoomChange = { activeRoomState = it })
+                    0 -> RoomScreen(
+                        activeRoom = activeRoomState, 
+                        onRoomChange = { newRoom ->
+                            activeRoomState = newRoom
+                            prefs.edit().putString("ACTIVE_ROOM", newRoom).apply()
+                        }
+                    )
                     1 -> LiveGpsScreen(activeRoom = activeRoomState)
                     2 -> TripHistoryScreen()
                 }
@@ -171,7 +189,7 @@ fun RoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Room Aktif: $activeRoom", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Status: Terhubung", fontSize = 12.sp)
+                    Text("Status: Tersimpan di Memori Lokal HP", fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(onClick = { onRoomChange(null) }) {
                         Text("Keluar Room")
