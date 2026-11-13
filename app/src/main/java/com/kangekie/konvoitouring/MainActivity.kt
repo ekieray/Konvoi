@@ -23,6 +23,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.google.firebase.FirebaseApp
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
 
 class MainActivity : ComponentActivity() {
 
@@ -39,7 +45,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Inisialisasi aman Firebase & SharedPreferences
+        FirebaseApp.initializeApp(this)
         sharedPreferences = getSharedPreferences("KonvoiPrefs", Context.MODE_PRIVATE)
+        
         checkLocationPermission()
 
         setContent {
@@ -83,9 +93,11 @@ fun KonvoiApp(prefs: SharedPreferences) {
     var selectedTab by remember { mutableStateOf(0) }
     var sosActive by remember { mutableStateOf(false) }
     
-    var activeRoomState by remember { 
+    var activeRoomCode by remember { 
         mutableStateOf(prefs.getString("ACTIVE_ROOM", null)) 
     }
+
+    val database = Firebase.database.reference
 
     Scaffold(
         topBar = {
@@ -126,7 +138,13 @@ fun KonvoiApp(prefs: SharedPreferences) {
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { sosActive = !sosActive },
+                onClick = { 
+                    sosActive = !sosActive
+                    // Kirim sinyal SOS ke Cloud jika ada room aktif
+                    if (activeRoomCode != null) {
+                        database.child("rooms").child(activeRoomCode!!).child("sos").setValue(sosActive)
+                    }
+                },
                 containerColor = if (sosActive) Color.Red else Color(0xFFFF5722)
             ) {
                 Icon(Icons.Default.Warning, contentDescription = "SOS", tint = Color.White)
@@ -144,23 +162,31 @@ fun KonvoiApp(prefs: SharedPreferences) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("🚨 DARURAT: SOS DIAKTIFKAN!", fontWeight = FontWeight.Bold, color = Color.Red, fontSize = 18.sp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Sinyal darurat disiarkan untuk keamanan peserta konvoi.")
+                        Text("Sinyal darurat disiarkan secara real-time ke Cloud Firebase untuk peserta konvoi.")
                         Spacer(modifier = Modifier.height(12.dp))
-                        Button(onClick = { sosActive = false }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) {
+                        Button(
+                            onClick = { 
+                                sosActive = false
+                                if (activeRoomCode != null) {
+                                    database.child("rooms").child(activeRoomCode!!).child("sos").setValue(false)
+                                }
+                            }, 
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        ) {
                             Text("Batalkan SOS")
                         }
                     }
                 }
             } else {
                 when (selectedTab) {
-                    0 -> RoomScreen(
-                        activeRoom = activeRoomState, 
+                    0 -> CloudRoomScreen(
+                        activeRoom = activeRoomCode, 
                         onRoomChange = { newRoom ->
-                            activeRoomState = newRoom
+                            activeRoomCode = newRoom
                             prefs.edit().putString("ACTIVE_ROOM", newRoom).apply()
                         }
                     )
-                    1 -> LiveGpsScreen(activeRoom = activeRoomState)
+                    1 -> CloudLiveGpsScreen(activeRoom = activeRoomCode)
                     2 -> TripHistoryScreen()
                 }
             }
@@ -169,14 +195,17 @@ fun KonvoiApp(prefs: SharedPreferences) {
 }
 
 @Composable
-fun RoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
+fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var showJoinDialog by remember { mutableStateOf(false) }
     var roomNameInput by remember { mutableStateOf("") }
     var roomCodeInput by remember { mutableStateOf("") }
+    var statusMessage by remember { mutableStateOf("") }
+
+    val database = Firebase.database.reference
 
     Column(modifier = Modifier.padding(16.dp)) {
-        Text("Manajemen Room Konvoi", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("Manajemen Room Cloud", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
 
         if (activeRoom != null) {
@@ -185,9 +214,9 @@ fun RoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Room Aktif: $activeRoom", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
+                    Text("Terhubung ke Room Code: $activeRoom", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Status: Terhubung", fontSize = 12.sp)
+                    Text("Status: Sinkronisasi Firebase Aktif", fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(onClick = { onRoomChange(null) }) {
                         Text("Keluar Room")
@@ -197,37 +226,62 @@ fun RoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        Button(onClick = { showCreateDialog = true }, modifier = Modifier.fillMaxWidth()) {
+        if (statusMessage.isNotEmpty()) {
+            Text(statusMessage, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Button(
+            onClick = { showCreateDialog = true }, 
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Buat Room Baru")
+            Text("Buat Room Online Baru")
         }
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedButton(onClick = { showJoinDialog = true }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { showJoinDialog = true }, 
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Icon(Icons.Default.AccountCircle, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Gabung via Kode Room")
+            Text("Gabung Room via Kode")
         }
     }
 
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
-            title = { Text("Buat Room Konvoi") },
+            title = { Text("Buat Room Online") },
             text = {
                 OutlinedTextField(
                     value = roomNameInput,
                     onValueChange = { roomNameInput = it },
-                    label = { Text("Nama Rute / Touring") },
+                    label = { Text("Nama Touring / Rute") },
                     singleLine = true
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     if (roomNameInput.isNotBlank()) {
-                        onRoomChange(roomNameInput)
-                        roomNameInput = ""
-                        showCreateDialog = false
+                        val generatedCode = (1000..9999).random().toString()
+                        val roomData = mapOf(
+                            "name" to roomNameInput,
+                            "creator" to "Kang Ekie",
+                            "sos" to false
+                        )
+                        database.child("rooms").child(generatedCode).setValue(roomData)
+                            .addOnSuccessListener {
+                                onRoomChange(generatedCode)
+                                statusMessage = "Berhasil membuat Room! Kode: $generatedCode"
+                                roomNameInput = ""
+                                showCreateDialog = false
+                            }
+                            .addOnFailureListener {
+                                statusMessage = "Gagal terhubung ke Cloud"
+                                showCreateDialog = false
+                            }
                     }
                 }) { Text("Buat") }
             },
@@ -240,21 +294,33 @@ fun RoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
     if (showJoinDialog) {
         AlertDialog(
             onDismissRequest = { showJoinDialog = false },
-            title = { Text("Gabung Room") },
+            title = { Text("Gabung Room Konvoi") },
             text = {
                 OutlinedTextField(
                     value = roomCodeInput,
                     onValueChange = { roomCodeInput = it },
-                    label = { Text("Masukkan Kode Room") },
+                    label = { Text("Masukkan 4 Digit Kode Room") },
                     singleLine = true
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     if (roomCodeInput.isNotBlank()) {
-                        onRoomChange("Room: $roomCodeInput")
-                        roomCodeInput = ""
-                        showJoinDialog = false
+                        database.child("rooms").child(roomCodeInput).get()
+                            .addOnSuccessListener { snapshot ->
+                                if (snapshot.exists()) {
+                                    onRoomChange(roomCodeInput)
+                                    statusMessage = "Berhasil bergabung ke Room $roomCodeInput"
+                                } else {
+                                    statusMessage = "Room dengan kode tersebut tidak ditemukan!"
+                                }
+                                roomCodeInput = ""
+                                showJoinDialog = false
+                            }
+                            .addOnFailureListener {
+                                statusMessage = "Gagal memuat data dari Cloud"
+                                showJoinDialog = false
+                            }
                     }
                 }) { Text("Gabung") }
             },
@@ -266,7 +332,29 @@ fun RoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
 }
 
 @Composable
-fun LiveGpsScreen(activeRoom: String?) {
+fun CloudLiveGpsScreen(activeRoom: String?) {
+    var roomStatusText by remember { mutableStateOf("Menunggu data cloud...") }
+    var sosAlertActive by remember { mutableStateOf(false) }
+    val database = Firebase.database.reference
+
+    LaunchedEffect(activeRoom) {
+        if (activeRoom != null) {
+            database.child("rooms").child(activeRoom).addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val roomName = snapshot.child("name").getValue(String::class.java) ?: "Konvoi"
+                    val isSos = snapshot.child("sos").getValue(Boolean::class.java) ?: false
+                    roomStatusText = "Room: $roomName (Terhubung Realtime)"
+                    sosAlertActive = isSos
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    roomStatusText = "Gagal sinkronisasi cloud: ${error.message}"
+                }
+            })
+        } else {
+            roomStatusText = "Anda belum bergabung di Room manapun."
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -274,13 +362,30 @@ fun LiveGpsScreen(activeRoom: String?) {
     ) {
         Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Radar Konvoi Aktif", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(if (activeRoom != null) "Terhubung ke: $activeRoom" else "Belum bergabung di Room manapun", fontSize = 13.sp, color = Color.Gray)
+        Text("Radar Konvoi Realtime", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(roomStatusText, fontSize = 13.sp, color = Color.Gray)
+        
+        if (sosAlertActive) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFCDD2))
+            ) {
+                Text(
+                    "🚨 PERINGATAN: Ada anggota konvoi mengaktifkan SOS di room ini!",
+                    modifier = Modifier.padding(12.dp),
+                    color = Color.Red,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("📍 Checkpoint 1: SPBU Terdekat", fontSize = 14.sp)
-                Text("🏁 Tujuan Akhir Konvoi", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+                Text("📍 Status GPS: Aktif & Sinkron Online", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("🏁 Tujuan: Sesuai rute Room aktif", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
@@ -341,7 +446,6 @@ fun TripHistoryScreen() {
         }
     }
 
-    // Dialog Tambah Riwayat Perjalanan Baru
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
@@ -385,7 +489,6 @@ fun TripHistoryScreen() {
         )
     }
 
-    // Modal Ringkasan Strava Card
     if (selectedTrip != null) {
         AlertDialog(
             onDismissRequest = { selectedTrip = null },
