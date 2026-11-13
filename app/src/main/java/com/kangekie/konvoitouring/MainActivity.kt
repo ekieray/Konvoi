@@ -6,7 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -171,7 +171,7 @@ fun RoomManagementScreen() {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Room Aktif: $activeRoomState", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Status: Terhubung dengan peserta konvoi", fontSize = 12.sp)
+                    Text("Status: Terhubung ke Cloud Firebase", fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(onClick = { activeRoomState = null }) {
                         Text("Keluar Room")
@@ -200,7 +200,6 @@ fun RoomManagementScreen() {
         }
     }
 
-    // Dialog Buat Room
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
@@ -232,7 +231,6 @@ fun RoomManagementScreen() {
         )
     }
 
-    // Dialog Gabung Room
     if (showJoinDialog) {
         AlertDialog(
             onDismissRequest = { showJoinDialog = false },
@@ -275,11 +273,11 @@ fun LiveGpsTrackingScreen() {
         Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(8.dp))
         Text("Radar Konvoi Aktif", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text("Menampilkan posisi peserta & checkpoint terdekat", fontSize = 12.sp, color = Color.Gray)
+        Text("Sinkronisasi Realtime GPS via Cloud", fontSize = 12.sp, color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("📍 Checkpoint 1: SPBU Cibinong (Lewati)", fontSize = 14.sp)
+                Text("📍 Checkpoint 1: SPBU Cibinong (Aktif)", fontSize = 14.sp)
                 Text("🏁 Checkpoint 2: Alun-Alun Bogor (Tujuan)", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
             }
         }
@@ -303,8 +301,9 @@ fun TripHistoryScreen() {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(dummyTrips) { trip ->
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { selectedTrip = trip }
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedTrip = trip }
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -322,7 +321,6 @@ fun TripHistoryScreen() {
         }
     }
 
-    // Modal Ringkasan Strava saat item riwayat diklik
     if (selectedTrip != null) {
         AlertDialog(
             onDismissRequest = { selectedTrip = null },
