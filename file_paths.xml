@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path
+        name="shared_cards"
+        path="shared_cards/" />
+    <cache-path
+        name="gpx_exports"
+        path="gpx_exports/" />
+    <files-path
+        name="exported_trips"
+        path="exports/" />
+</paths>

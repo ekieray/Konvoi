@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KonvoiKu</string>
+    <string name="app_tagline">Konvoi Touring Mobil &amp; Motor</string>
+    <string name="creator_credit">App Created &amp; Designed by Kang Ekie</string>
+    <string name="share_card_chooser_title">Bagikan Kartu Tour KonvoiKu</string>
+    <string name="share_gpx_chooser_title">Ekspor Rute GPX KonvoiKu</string>
+</resources>
