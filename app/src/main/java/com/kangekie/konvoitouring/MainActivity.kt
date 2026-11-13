@@ -235,7 +235,7 @@ fun RoomManagementScreen(activeRoom: String?, onRoomChanged: (String?) -> Unit) 
                         val roomData = mapOf(
                             "name" to roomNameInput,
                             "creator" to "Kang Ekie",
-                            "status" = "Active"
+                            "status" to "Active"
                         )
                         database.child("rooms").child(generatedCode).setValue(roomData)
                             .addOnSuccessListener {
@@ -307,22 +307,22 @@ fun RoomManagementScreen(activeRoom: String?, onRoomChanged: (String?) -> Unit) 
 
 @Composable
 fun LiveGpsTrackingScreen(activeRoom: String?) {
-    var participantCount by remember { mutableStateOf("Menunggu data...") }
+    var roomStatusText by remember { mutableStateOf("Menunggu data...") }
     val database = Firebase.database.reference
 
     LaunchedEffect(activeRoom) {
         if (activeRoom != null) {
             database.child("rooms").child(activeRoom).addValueEventListener(object : ValueEventListener {
-                onDataChange(snapshot: DataSnapshot) {
+                override fun onDataChange(snapshot: DataSnapshot) {
                     val roomName = snapshot.child("name").getValue(String::class.java) ?: "Konvoi"
-                    participantCount = "Room Aktif: $roomName (Terhubung)"
+                    roomStatusText = "Room Aktif: $roomName (Terhubung ke Cloud)"
                 }
                 override fun onCancelled(error: DatabaseError) {
-                    participantCount = "Gagal sinkronisasi GPS"
+                    roomStatusText = "Gagal sinkronisasi GPS: ${error.message}"
                 }
             })
         } else {
-            participantCount = "Anda belum bergabung di Room manapun."
+            roomStatusText = "Anda belum bergabung di Room manapun."
         }
     }
 
@@ -334,11 +334,11 @@ fun LiveGpsTrackingScreen(activeRoom: String?) {
         Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(8.dp))
         Text("Radar Konvoi Realtime", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(participantCount, fontSize = 13.sp, color = Color.Gray)
+        Text(roomStatusText, fontSize = 13.sp, color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("📍 Status GPS: Aktif & Mengirim Koordinat", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("📍 Status GPS: Aktif & Sinkron Cloud", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Text("🏁 Tujuan: Sesuai rute Room aktif", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
             }
         }
