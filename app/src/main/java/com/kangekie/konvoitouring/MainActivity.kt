@@ -39,10 +39,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Inisialisasi SharedPreferences untuk penyimpanan lokal HP
         sharedPreferences = getSharedPreferences("KonvoiPrefs", Context.MODE_PRIVATE)
-        
         checkLocationPermission()
 
         setContent {
@@ -78,13 +75,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+data class TripItem(val title: String, val distance: String, val time: String)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KonvoiApp(prefs: SharedPreferences) {
     var selectedTab by remember { mutableStateOf(0) }
     var sosActive by remember { mutableStateOf(false) }
     
-    // Memuat state Room terakhir yang tersimpan di HP
     var activeRoomState by remember { 
         mutableStateOf(prefs.getString("ACTIVE_ROOM", null)) 
     }
@@ -189,7 +187,7 @@ fun RoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Room Aktif: $activeRoom", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Status: Tersimpan di Memori Lokal HP", fontSize = 12.sp)
+                    Text("Status: Terhubung", fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(onClick = { onRoomChange(null) }) {
                         Text("Keluar Room")
@@ -290,20 +288,38 @@ fun LiveGpsScreen(activeRoom: String?) {
 
 @Composable
 fun TripHistoryScreen() {
-    data class TripItem(val title: String, val distance: String, val time: String)
-    val dummyTrips = listOf(
-        TripItem("Touring Bandung - Lembang", "120 km", "3 jam 45 mnt"),
-        TripItem("Ride Santai Bogor - Puncak", "75 km", "2 jam 10 mnt"),
-        TripItem("Night Ride Sentul City", "45 km", "1 jam 20 mnt")
-    )
+    var tripList = remember {
+        mutableStateListOf(
+            TripItem("Touring Bandung - Lembang", "120 km", "3 jam 45 mnt"),
+            TripItem("Ride Santai Bogor - Puncak", "75 km", "2 jam 10 mnt"),
+            TripItem("Night Ride Sentul City", "45 km", "1 jam 20 mnt")
+        )
+    }
+
+    var showAddDialog by remember { mutableStateOf(false) }
+    var titleInput by remember { mutableStateOf("") }
+    var distanceInput by remember { mutableStateOf("") }
+    var timeInput by remember { mutableStateOf("") }
 
     var selectedTrip by remember { mutableStateOf<TripItem?>(null) }
 
     Column(modifier = Modifier.padding(16.dp)) {
-        Text("Riwayat Perjalanan (Strava Style)", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Riwayat Touring", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Button(onClick = { showAddDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Tambah")
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
+
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(dummyTrips) { trip ->
+            items(tripList) { trip ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -325,19 +341,63 @@ fun TripHistoryScreen() {
         }
     }
 
+    // Dialog Tambah Riwayat Perjalanan Baru
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("Catat Perjalanan Baru") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = titleInput,
+                        onValueChange = { titleInput = it },
+                        label = { Text("Nama Rute / Tujuan") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = distanceInput,
+                        onValueChange = { distanceInput = it },
+                        label = { Text("Jarak (Contoh: 90 km)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = timeInput,
+                        onValueChange = { timeInput = it },
+                        label = { Text("Durasi (Contoh: 2 jam)") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (titleInput.isNotBlank() && distanceInput.isNotBlank()) {
+                        tripList.add(0, TripItem(titleInput, distanceInput, if (timeInput.isBlank()) "1 jam" else timeInput))
+                        titleInput = ""
+                        distanceInput = ""
+                        timeInput = ""
+                        showAddDialog = false
+                    }
+                }) { Text("Simpan") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
+    // Modal Ringkasan Strava Card
     if (selectedTrip != null) {
         AlertDialog(
             onDismissRequest = { selectedTrip = null },
-            title = { Text("📊 Ringkasan Strava Card") },
+            title = { Text("📊 Strava Summary Card") },
             text = {
-                Column {
-                    Text("Perjalanan: ${selectedTrip?.title}", fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Rute: ${selectedTrip?.title}", fontWeight = FontWeight.Bold)
                     Text("Jarak Tempuh: ${selectedTrip?.distance}")
-                    Text("Durasi Total: ${selectedTrip?.time}")
-                    Text("Kecepatan Rata-rata: 42 km/jam")
+                    Text("Waktu Perjalanan: ${selectedTrip?.time}")
+                    Text("Rata-rata Kecepatan: 45 km/jam")
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("✨ Created by Kang Ekie", fontSize = 12.sp, color = Color.Blue)
+                    Text("✨ Created by Kang Ekie", fontSize = 12.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
                 }
             },
             confirmButton = {
