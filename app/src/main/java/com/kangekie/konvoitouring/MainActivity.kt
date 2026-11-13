@@ -28,19 +28,13 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         when {
-            permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) -> {
-                // Lokasi akurat diizinkan
-            }
-            permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false) -> {
-                // Lokasi kasar diizinkan
-            }
+            permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) -> {}
+            permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false) -> {}
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Meminta izin lokasi secara otomatis saat aplikasi dibuka
         checkLocationPermission()
 
         setContent {
@@ -159,49 +153,159 @@ fun KonvoiApp() {
 
 @Composable
 fun RoomManagementScreen() {
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var showJoinDialog by remember { mutableStateOf(false) }
+    var roomName by remember { mutableStateOf("") }
+    var roomCodeInput by remember { mutableStateOf("") }
+    var activeRoomState by remember { mutableStateOf<String?>(null) }
+
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Manajemen Room Konvoi", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = { /* Buat Room */ }, modifier = Modifier.fillMaxWidth()) {
+
+        if (activeRoomState != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Room Aktif: $activeRoomState", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Status: Terhubung dengan peserta konvoi", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(onClick = { activeRoomState = null }) {
+                        Text("Keluar Room")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        Button(
+            onClick = { showCreateDialog = true }, 
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text("Buat Room Baru")
         }
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedButton(onClick = { /* Gabung Room */ }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { showJoinDialog = true }, 
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Icon(Icons.Default.AccountCircle, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text("Gabung via Kode Room")
         }
     }
+
+    // Dialog Buat Room
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateDialog = false },
+            title = { Text("Buat Room Konvoi") },
+            text = {
+                OutlinedTextField(
+                    value = roomName,
+                    onValueChange = { roomName = it },
+                    label = { Text("Nama Rute / Touring") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (roomName.isNotBlank()) {
+                        activeRoomState = roomName
+                        roomName = ""
+                        showCreateDialog = false
+                    }
+                }) {
+                    Text("Buat")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Dialog Gabung Room
+    if (showJoinDialog) {
+        AlertDialog(
+            onDismissRequest = { showJoinDialog = false },
+            title = { Text("Gabung Room") },
+            text = {
+                OutlinedTextField(
+                    value = roomCodeInput,
+                    onValueChange = { roomCodeInput = it },
+                    label = { Text("Masukkan Kode Room") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (roomCodeInput.isNotBlank()) {
+                        activeRoomState = "Room: $roomCodeInput"
+                        roomCodeInput = ""
+                        showJoinDialog = false
+                    }
+                }) {
+                    Text("Gabung")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJoinDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun LiveGpsTrackingScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Memuat Peta Live GPS...", fontWeight = FontWeight.SemiBold)
-            Text("Melacak posisi anggota konvoi & avatar aktif", fontSize = 12.sp, color = Color.Gray)
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Radar Konvoi Aktif", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text("Menampilkan posisi peserta & checkpoint terdekat", fontSize = 12.sp, color = Color.Gray)
+        Spacer(modifier = Modifier.height(24.dp))
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("📍 Checkpoint 1: SPBU Cibinong (Lewati)", fontSize = 14.sp)
+                Text("🏁 Checkpoint 2: Alun-Alun Bogor (Tujuan)", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+            }
         }
     }
 }
 
 @Composable
 fun TripHistoryScreen() {
+    data class TripItem(val title: String, val distance: String, val time: String)
     val dummyTrips = listOf(
-        "Touring Bandung - Lembang (120 km) • Strava Card",
-        "Ride Santai Bogor - Puncak (75 km) • Strava Card",
-        "Night Ride Sentul City (45 km) • Strava Card"
+        TripItem("Touring Bandung - Lembang", "120 km", "3 jam 45 mnt"),
+        TripItem("Ride Santai Bogor - Puncak", "75 km", "2 jam 10 mnt"),
+        TripItem("Night Ride Sentul City", "45 km", "1 jam 20 mnt")
     )
 
+    var selectedTrip by remember { mutableStateOf<TripItem?>(null) }
+
     Column(modifier = Modifier.padding(16.dp)) {
-        Text("Riwayat Perjalanan (Trip History)", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("Riwayat Perjalanan (Strava Style)", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(dummyTrips) { trip ->
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { selectedTrip = trip }
+                ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -209,12 +313,36 @@ fun TripHistoryScreen() {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text(trip, fontWeight = FontWeight.Medium)
-                            Text("Ketuk untuk lihat Ringkasan Strava", fontSize = 11.sp, color = Color.Gray)
+                            Text(trip.title, fontWeight = FontWeight.Medium)
+                            Text("Jarak: ${trip.distance} • Waktu: ${trip.time}", fontSize = 11.sp, color = Color.Gray)
                         }
                     }
                 }
             }
         }
+    }
+
+    // Modal Ringkasan Strava saat item riwayat diklik
+    if (selectedTrip != null) {
+        AlertDialog(
+            onDismissRequest = { selectedTrip = null },
+            title = { Text("📊 Ringkasan Strava Card") },
+            text = {
+                Column {
+                    Text("Perjalanan: ${selectedTrip?.title}", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Jarak Tempuh: ${selectedTrip?.distance}")
+                    Text("Durasi Total: ${selectedTrip?.time}")
+                    Text("Kecepatan Rata-rata: 42 km/jam")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("✨ Created by Kang Ekie", fontSize = 12.sp, color = Color.Blue)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedTrip = null }) {
+                    Text("Tutup")
+                }
+            }
+        )
     }
 }
