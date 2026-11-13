@@ -46,10 +46,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Inisialisasi aman Firebase & SharedPreferences
-        FirebaseApp.initializeApp(this)
-        sharedPreferences = getSharedPreferences("KonvoiPrefs", Context.MODE_PRIVATE)
+        try {
+            FirebaseApp.initializeApp(this)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         
+        sharedPreferences = getSharedPreferences("KonvoiPrefs", Context.MODE_PRIVATE)
         checkLocationPermission()
 
         setContent {
@@ -97,7 +100,7 @@ fun KonvoiApp(prefs: SharedPreferences) {
         mutableStateOf(prefs.getString("ACTIVE_ROOM", null)) 
     }
 
-    val database = Firebase.database.reference
+    val database = try { Firebase.database.reference } catch (e: Exception) { null }
 
     Scaffold(
         topBar = {
@@ -140,9 +143,10 @@ fun KonvoiApp(prefs: SharedPreferences) {
             FloatingActionButton(
                 onClick = { 
                     sosActive = !sosActive
-                    // Kirim sinyal SOS ke Cloud jika ada room aktif
-                    if (activeRoomCode != null) {
-                        database.child("rooms").child(activeRoomCode!!).child("sos").setValue(sosActive)
+                    if (activeRoomCode != null && database != null) {
+                        try {
+                            database.child("rooms").child(activeRoomCode!!).child("sos").setValue(sosActive)
+                        } catch (e: Exception) { e.printStackTrace() }
                     }
                 },
                 containerColor = if (sosActive) Color.Red else Color(0xFFFF5722)
@@ -162,13 +166,15 @@ fun KonvoiApp(prefs: SharedPreferences) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("🚨 DARURAT: SOS DIAKTIFKAN!", fontWeight = FontWeight.Bold, color = Color.Red, fontSize = 18.sp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Sinyal darurat disiarkan secara real-time ke Cloud Firebase untuk peserta konvoi.")
+                        Text("Sinyal darurat disiarkan secara real-time ke Cloud Firebase.")
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = { 
                                 sosActive = false
-                                if (activeRoomCode != null) {
-                                    database.child("rooms").child(activeRoomCode!!).child("sos").setValue(false)
+                                if (activeRoomCode != null && database != null) {
+                                    try {
+                                        database.child("rooms").child(activeRoomCode!!).child("sos").setValue(false)
+                                    } catch (e: Exception) { e.printStackTrace() }
                                 }
                             }, 
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
@@ -202,7 +208,7 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
     var roomCodeInput by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
 
-    val database = Firebase.database.reference
+    val database = try { Firebase.database.reference } catch (e: Exception) { null }
 
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Manajemen Room Cloud", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -264,7 +270,7 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (roomNameInput.isNotBlank()) {
+                    if (roomNameInput.isNotBlank() && database != null) {
                         val generatedCode = (1000..9999).random().toString()
                         val roomData = mapOf(
                             "name" to roomNameInput,
@@ -278,10 +284,13 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
                                 roomNameInput = ""
                                 showCreateDialog = false
                             }
-                            .addOnFailureListener {
-                                statusMessage = "Gagal terhubung ke Cloud"
+                            .addOnFailureListener { err ->
+                                statusMessage = "Gagal Cloud: ${err.localizedMessage}"
                                 showCreateDialog = false
                             }
+                    } else {
+                        statusMessage = "Database belum terinisialisasi"
+                        showCreateDialog = false
                     }
                 }) { Text("Buat") }
             },
@@ -305,20 +314,20 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (roomCodeInput.isNotBlank()) {
+                    if (roomCodeInput.isNotBlank() && database != null) {
                         database.child("rooms").child(roomCodeInput).get()
                             .addOnSuccessListener { snapshot ->
                                 if (snapshot.exists()) {
                                     onRoomChange(roomCodeInput)
                                     statusMessage = "Berhasil bergabung ke Room $roomCodeInput"
                                 } else {
-                                    statusMessage = "Room dengan kode tersebut tidak ditemukan!"
+                                    statusMessage = "Room tidak ditemukan!"
                                 }
                                 roomCodeInput = ""
                                 showJoinDialog = false
                             }
                             .addOnFailureListener {
-                                statusMessage = "Gagal memuat data dari Cloud"
+                                statusMessage = "Gagal memuat dari Cloud"
                                 showJoinDialog = false
                             }
                     }
@@ -335,19 +344,23 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
 fun CloudLiveGpsScreen(activeRoom: String?) {
     var roomStatusText by remember { mutableStateOf("Menunggu data cloud...") }
     var sosAlertActive by remember { mutableStateOf(false) }
-    val database = Firebase.database.reference
+    val database = try { Firebase.database.reference } catch (e: Exception) { null }
 
     LaunchedEffect(activeRoom) {
-        if (activeRoom != null) {
+        if (activeRoom != null && database != null) {
             database.child("rooms").child(activeRoom).addValueEventListener(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    val roomName = snapshot.child("name").getValue(String::class.java) ?: "Konvoi"
-                    val isSos = snapshot.child("sos").getValue(Boolean::class.java) ?: false
-                    roomStatusText = "Room: $roomName (Terhubung Realtime)"
-                    sosAlertActive = isSos
+                    try {
+                        val roomName = snapshot.child("name").getValue(String::class.java) ?: "Konvoi"
+                        val isSos = snapshot.child("sos").getValue(Boolean::class.java) ?: false
+                        roomStatusText = "Room: $roomName (Terhubung Realtime)"
+                        sosAlertActive = isSos
+                    } catch (e: Exception) {
+                        roomStatusText = "Data parsing error"
+                    }
                 }
                 override fun onCancelled(error: DatabaseError) {
-                    roomStatusText = "Gagal sinkronisasi cloud: ${error.message}"
+                    roomStatusText = "Gagal sinkronisasi: ${error.message}"
                 }
             })
         } else {
@@ -419,29 +432,6 @@ fun TripHistoryScreen() {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Tambah")
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(tripList) { trip ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedTrip = trip }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(trip.title, fontWeight = FontWeight.Medium)
-                            Text("Jarak: ${trip.distance} • Waktu: ${trip.time}", fontSize = 11.sp, color = Color.Gray)
-                        }
-                    }
-                }
             }
         }
     }
