@@ -100,7 +100,6 @@ fun KonvoiApp(prefs: SharedPreferences) {
         mutableStateOf(prefs.getString("ACTIVE_ROOM", null)) 
     }
 
-    // Inisialisasi Database Region Amerika (.firebaseio.com)
     val database = remember {
         try {
             Firebase.database("https://konvoitouring-default-rtdb.firebaseio.com").reference
@@ -224,4 +223,184 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
     }
 
     Column(modifier = Modifier.padding(16.dp)) {
-        Text
+        Text("Manajemen Room Cloud", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (activeRoom != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Terhubung ke Room Code: $activeRoom", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Status: Sinkronisasi Firebase US Aktif", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(onClick = { onRoomChange(null) }) {
+                        Text("Keluar Room")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        if (statusMessage.isNotEmpty()) {
+            Text(statusMessage, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Button(
+            onClick = { showCreateDialog = true }, 
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Buat Room Online Baru")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = { showJoinDialog = true }, 
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.AccountCircle, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Gabung Room via Kode")
+        }
+    }
+
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateDialog = false },
+            title = { Text("Buat Room Online") },
+            text = {
+                OutlinedTextField(
+                    value = roomNameInput,
+                    onValueChange = { roomNameInput = it },
+                    label = { Text("Nama Touring / Rute") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (roomNameInput.isNotBlank() && database != null) {
+                        val generatedCode = (1000..9999).random().toString()
+                        val roomData = mapOf(
+                            "name" to roomNameInput,
+                            "creator" to "Kang Ekie",
+                            "sos" to false
+                        )
+                        database.child("rooms").child(generatedCode).setValue(roomData)
+                            .addOnSuccessListener {
+                                onRoomChange(generatedCode)
+                                statusMessage = "Berhasil membuat Room! Kode: $generatedCode"
+                                roomNameInput = ""
+                                showCreateDialog = false
+                            }
+                            .addOnFailureListener { err ->
+                                statusMessage = "Gagal Cloud: ${err.localizedMessage}"
+                                showCreateDialog = false
+                            }
+                    } else {
+                        statusMessage = "Database belum terinisialisasi"
+                        showCreateDialog = false
+                    }
+                }) { Text("Buat") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
+    if (showJoinDialog) {
+        AlertDialog(
+            onDismissRequest = { showJoinDialog = false },
+            title = { Text("Gabung Room Konvoi") },
+            text = {
+                OutlinedTextField(
+                    value = roomCodeInput,
+                    onValueChange = { roomCodeInput = it },
+                    label = { Text("Masukkan 4 Digit Kode Room") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (roomCodeInput.isNotBlank() && database != null) {
+                        database.child("rooms").child(roomCodeInput).get()
+                            .addOnSuccessListener { snapshot ->
+                                if (snapshot.exists()) {
+                                    onRoomChange(roomCodeInput)
+                                    statusMessage = "Berhasil bergabung ke Room $roomCodeInput"
+                                } else {
+                                    statusMessage = "Room tidak ditemukan!"
+                                }
+                                roomCodeInput = ""
+                                showJoinDialog = false
+                            }
+                            .addOnFailureListener {
+                                statusMessage = "Gagal memuat dari Cloud"
+                                showJoinDialog = false
+                            }
+                    } else {
+                        statusMessage = "Database belum terinisialisasi"
+                    }
+                }) { Text("Gabung") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJoinDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+}
+
+@Composable
+fun CloudLiveGpsScreen(activeRoom: String?) {
+    var roomStatusText by remember { mutableStateOf("Menunggu data cloud...") }
+    var sosAlertActive by remember { mutableStateOf(false) }
+    
+    val database = remember {
+        try {
+            Firebase.database("https://konvoitouring-default-rtdb.firebaseio.com").reference
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    LaunchedEffect(activeRoom) {
+        if (activeRoom != null && database != null) {
+            database.child("rooms").child(activeRoom).addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    try {
+                        val roomName = snapshot.child("name").getValue(String::class.java) ?: "Konvoi"
+                        val isSos = snapshot.child("sos").getValue(Boolean::class.java) ?: false
+                        roomStatusText = "Room: $roomName (Terhubung Realtime US)"
+                        sosAlertActive = isSos
+                    } catch (e: Exception) {
+                        roomStatusText = "Data parsing error"
+                    }
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    roomStatusText = "Gagal sinkronisasi: ${error.message}"
+                }
+            })
+        } else {
+            roomStatusText = "Anda belum bergabung di Room manapun."
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Radar Konvoi Realtime", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(roomStatusText, fontSize = 13.sp, color = Color.Gray)
+        
+        if (sosAlertActive) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFCDD2))
