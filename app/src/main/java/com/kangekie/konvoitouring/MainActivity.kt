@@ -93,9 +93,10 @@ class MainActivity : ComponentActivity() {
 
 data class TripItem(val title: String, val distance: String, val time: String)
 
+// Menggunakan pembacaan standar dari google-services.json tanpa parameter manual
 fun getSafeDatabaseRef(): DatabaseReference? {
     return try {
-        Firebase.database("https://konvoitouring-default-rtdb.firebaseio.com").reference
+        Firebase.database.reference
     } catch (e: Exception) {
         e.printStackTrace()
         null
@@ -234,7 +235,7 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Terhubung ke Room Code: $activeRoom", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Status: Sinkronisasi Firebase US Aktif", fontSize = 12.sp)
+                    Text("Status: Sinkronisasi Firebase Aktif", fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(onClick = { onRoomChange(null) }) {
                         Text("Keluar Room")
@@ -370,7 +371,7 @@ fun CloudLiveGpsScreen(activeRoom: String?) {
                     try {
                         val roomName = snapshot.child("name").getValue(String::class.java) ?: "Konvoi"
                         val isSos = snapshot.child("sos").getValue(Boolean::class.java) ?: false
-                        roomStatusText = "Room: $roomName (Terhubung Realtime US)"
+                        roomStatusText = "Room: $roomName (Terhubung Realtime)"
                         sosAlertActive = isSos
                     } catch (e: Exception) {
                         roomStatusText = "Data parsing error"
