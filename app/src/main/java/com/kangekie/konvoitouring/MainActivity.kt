@@ -26,6 +26,7 @@ import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
@@ -47,7 +48,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         try {
-            FirebaseApp.initializeApp(this)
+            if (FirebaseApp.getApps(this).isEmpty()) {
+                FirebaseApp.initializeApp(this)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -90,6 +93,17 @@ class MainActivity : ComponentActivity() {
 
 data class TripItem(val title: String, val distance: String, val time: String)
 
+// Fungsi helper aman untuk mendapatkan database reference
+fun getSafeDatabaseRef(): DatabaseReference? {
+    return try {
+        // Ganti URL di bawah ini persis dengan URL Realtime Database Anda di Firebase Console
+        Firebase.database("https://konvoitouring-default-rtdb.firebaseio.com").reference
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KonvoiApp(prefs: SharedPreferences) {
@@ -100,13 +114,7 @@ fun KonvoiApp(prefs: SharedPreferences) {
         mutableStateOf(prefs.getString("ACTIVE_ROOM", null)) 
     }
 
-    val database = remember {
-        try {
-            Firebase.database("https://konvoitouring-default-rtdb.firebaseio.com").reference
-        } catch (e: Exception) {
-            null
-        }
-    }
+    val database = remember { getSafeDatabaseRef() }
 
     Scaffold(
         topBar = {
@@ -149,9 +157,10 @@ fun KonvoiApp(prefs: SharedPreferences) {
             FloatingActionButton(
                 onClick = { 
                     sosActive = !sosActive
-                    if (activeRoomCode != null && database != null) {
+                    val dbRef = getSafeDatabaseRef()
+                    if (activeRoomCode != null && dbRef != null) {
                         try {
-                            database.child("rooms").child(activeRoomCode!!).child("sos").setValue(sosActive)
+                            dbRef.child("rooms").child(activeRoomCode!!).child("sos").setValue(sosActive)
                         } catch (e: Exception) { e.printStackTrace() }
                     }
                 },
@@ -177,9 +186,10 @@ fun KonvoiApp(prefs: SharedPreferences) {
                         Button(
                             onClick = { 
                                 sosActive = false
-                                if (activeRoomCode != null && database != null) {
+                                val dbRef = getSafeDatabaseRef()
+                                if (activeRoomCode != null && dbRef != null) {
                                     try {
-                                        database.child("rooms").child(activeRoomCode!!).child("sos").setValue(false)
+                                        dbRef.child("rooms").child(activeRoomCode!!).child("sos").setValue(false)
                                     } catch (e: Exception) { e.printStackTrace() }
                                 }
                             }, 
@@ -214,13 +224,7 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
     var roomCodeInput by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
 
-    val database = remember {
-        try {
-            Firebase.database("https://konvoitouring-default-rtdb.firebaseio.com").reference
-        } catch (e: Exception) {
-            null
-        }
-    }
+    val database = remember { getSafeDatabaseRef() }
 
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Manajemen Room Cloud", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -282,14 +286,15 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (roomNameInput.isNotBlank() && database != null) {
+                    val dbRef = getSafeDatabaseRef()
+                    if (roomNameInput.isNotBlank() && dbRef != null) {
                         val generatedCode = (1000..9999).random().toString()
                         val roomData = mapOf(
                             "name" to roomNameInput,
                             "creator" to "Kang Ekie",
                             "sos" to false
                         )
-                        database.child("rooms").child(generatedCode).setValue(roomData)
+                        dbRef.child("rooms").child(generatedCode).setValue(roomData)
                             .addOnSuccessListener {
                                 onRoomChange(generatedCode)
                                 statusMessage = "Berhasil membuat Room! Kode: $generatedCode"
@@ -301,7 +306,7 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
                                 showCreateDialog = false
                             }
                     } else {
-                        statusMessage = "Database belum terinisialisasi"
+                        statusMessage = "Database belum terinisialisasi / Kosong"
                         showCreateDialog = false
                     }
                 }) { Text("Buat") }
@@ -326,8 +331,9 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (roomCodeInput.isNotBlank() && database != null) {
-                        database.child("rooms").child(roomCodeInput).get()
+                    val dbRef = getSafeDatabaseRef()
+                    if (roomCodeInput.isNotBlank() && dbRef != null) {
+                        dbRef.child("rooms").child(roomCodeInput).get()
                             .addOnSuccessListener { snapshot ->
                                 if (snapshot.exists()) {
                                     onRoomChange(roomCodeInput)
@@ -359,13 +365,7 @@ fun CloudLiveGpsScreen(activeRoom: String?) {
     var roomStatusText by remember { mutableStateOf("Menunggu data cloud...") }
     var sosAlertActive by remember { mutableStateOf(false) }
     
-    val database = remember {
-        try {
-            Firebase.database("https://konvoitouring-default-rtdb.firebaseio.com").reference
-        } catch (e: Exception) {
-            null
-        }
-    }
+    val database = remember { getSafeDatabaseRef() }
 
     LaunchedEffect(activeRoom) {
         if (activeRoom != null && database != null) {
@@ -437,108 +437,3 @@ fun TripHistoryScreen() {
 
     var showAddDialog by remember { mutableStateOf(false) }
     var titleInput by remember { mutableStateOf("") }
-    var distanceInput by remember { mutableStateOf("") }
-    var timeInput by remember { mutableStateOf("") }
-    var selectedTrip by remember { mutableStateOf<TripItem?>(null) }
-
-    Column(modifier = Modifier.padding(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Riwayat Touring", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Button(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Tambah")
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(tripList) { trip ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedTrip = trip }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(trip.title, fontWeight = FontWeight.Medium)
-                            Text("Jarak: ${trip.distance} • Waktu: ${trip.time}", fontSize = 11.sp, color = Color.Gray)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            title = { Text("Catat Perjalanan Baru") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = titleInput,
-                        onValueChange = { titleInput = it },
-                        label = { Text("Nama Rute / Tujuan") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = distanceInput,
-                        onValueChange = { distanceInput = it },
-                        label = { Text("Jarak (Contoh: 90 km)") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = timeInput,
-                        onValueChange = { timeInput = it },
-                        label = { Text("Durasi (Contoh: 2 jam)") },
-                        singleLine = true
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (titleInput.isNotBlank() && distanceInput.isNotBlank()) {
-                        tripList.add(0, TripItem(titleInput, distanceInput, if (timeInput.isBlank()) "1 jam" else timeInput))
-                        titleInput = ""
-                        distanceInput = ""
-                        timeInput = ""
-                        showAddDialog = false
-                    }
-                }) { Text("Simpan") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) { Text("Batal") }
-            }
-        )
-    }
-
-    if (selectedTrip != null) {
-        AlertDialog(
-            onDismissRequest = { selectedTrip = null },
-            title = { Text("📊 Strava Summary Card") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Rute: ${selectedTrip?.title}", fontWeight = FontWeight.Bold)
-                    Text("Jarak Tempuh: ${selectedTrip?.distance}")
-                    Text("Waktu Perjalanan: ${selectedTrip?.time}")
-                    Text("Rata-rata Kecepatan: 45 km/jam")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("✨ Created by Kang Ekie", fontSize = 12.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { selectedTrip = null }) { Text("Tutup") }
-            }
-        )
-    }
-}
