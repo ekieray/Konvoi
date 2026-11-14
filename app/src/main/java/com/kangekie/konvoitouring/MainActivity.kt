@@ -100,7 +100,14 @@ fun KonvoiApp(prefs: SharedPreferences) {
         mutableStateOf(prefs.getString("ACTIVE_ROOM", null)) 
     }
 
-    val database = try { Firebase.database.reference } catch (e: Exception) { null }
+    // Inisialisasi Database dengan penanganan aman
+    val database = remember {
+        try {
+            Firebase.database.reference
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -208,7 +215,9 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
     var roomCodeInput by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
 
-    val database = try { Firebase.database.reference } catch (e: Exception) { null }
+    val database = remember {
+        try { Firebase.database.reference } catch (e: Exception) { null }
+    }
 
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Manajemen Room Cloud", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -330,6 +339,8 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
                                 statusMessage = "Gagal memuat dari Cloud"
                                 showJoinDialog = false
                             }
+                    } else {
+                        statusMessage = "Database belum terinisialisasi"
                     }
                 }) { Text("Gabung") }
             },
@@ -344,7 +355,10 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
 fun CloudLiveGpsScreen(activeRoom: String?) {
     var roomStatusText by remember { mutableStateOf("Menunggu data cloud...") }
     var sosAlertActive by remember { mutableStateOf(false) }
-    val database = try { Firebase.database.reference } catch (e: Exception) { null }
+    
+    val database = remember {
+        try { Firebase.database.reference } catch (e: Exception) { null }
+    }
 
     LaunchedEffect(activeRoom) {
         if (activeRoom != null && database != null) {
@@ -418,7 +432,6 @@ fun TripHistoryScreen() {
     var titleInput by remember { mutableStateOf("") }
     var distanceInput by remember { mutableStateOf("") }
     var timeInput by remember { mutableStateOf("") }
-
     var selectedTrip by remember { mutableStateOf<TripItem?>(null) }
 
     Column(modifier = Modifier.padding(16.dp)) {
@@ -432,6 +445,29 @@ fun TripHistoryScreen() {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Tambah")
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(tripList) { trip ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedTrip = trip }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(trip.title, fontWeight = FontWeight.Medium)
+                            Text("Jarak: ${trip.distance} • Waktu: ${trip.time}", fontSize = 11.sp, color = Color.Gray)
+                        }
+                    }
+                }
             }
         }
     }
