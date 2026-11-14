@@ -14,4 +14,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Konvoi Touring"
-include ':app'
+include(":app")
