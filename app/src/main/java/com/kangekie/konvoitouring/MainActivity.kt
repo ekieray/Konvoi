@@ -93,10 +93,8 @@ class MainActivity : ComponentActivity() {
 
 data class TripItem(val title: String, val distance: String, val time: String)
 
-// Fungsi helper aman untuk mendapatkan database reference
 fun getSafeDatabaseRef(): DatabaseReference? {
     return try {
-        // Ganti URL di bawah ini persis dengan URL Realtime Database Anda di Firebase Console
         Firebase.database("https://konvoitouring-default-rtdb.firebaseio.com").reference
     } catch (e: Exception) {
         e.printStackTrace()
@@ -224,8 +222,6 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
     var roomCodeInput by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
 
-    val database = remember { getSafeDatabaseRef() }
-
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Manajemen Room Cloud", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
@@ -306,7 +302,7 @@ fun CloudRoomScreen(activeRoom: String?, onRoomChange: (String?) -> Unit) {
                                 showCreateDialog = false
                             }
                     } else {
-                        statusMessage = "Database belum terinisialisasi / Kosong"
+                        statusMessage = "Database belum terinisialisasi"
                         showCreateDialog = false
                     }
                 }) { Text("Buat") }
@@ -427,7 +423,7 @@ fun CloudLiveGpsScreen(activeRoom: String?) {
 
 @Composable
 fun TripHistoryScreen() {
-    var tripList = remember {
+    val tripList = remember {
         mutableStateListOf(
             TripItem("Touring Bandung - Lembang", "120 km", "3 jam 45 mnt"),
             TripItem("Ride Santai Bogor - Puncak", "75 km", "2 jam 10 mnt"),
@@ -437,3 +433,108 @@ fun TripHistoryScreen() {
 
     var showAddDialog by remember { mutableStateOf(false) }
     var titleInput by remember { mutableStateOf("") }
+    var distanceInput by remember { mutableStateOf("") }
+    var timeInput by remember { mutableStateOf("") }
+    var selectedTrip by remember { mutableStateOf<TripItem?>(null) }
+
+    Column(modifier = Modifier.padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Riwayat Touring", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Button(onClick = { showAddDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Tambah")
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(tripList) { trip ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedTrip = trip }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(trip.title, fontWeight = FontWeight.Medium)
+                            Text("Jarak: ${trip.distance} • Waktu: ${trip.time}", fontSize = 11.sp, color = Color.Gray)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("Catat Perjalanan Baru") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = titleInput,
+                        onValueChange = { titleInput = it },
+                        label = { Text("Nama Rute / Tujuan") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = distanceInput,
+                        onValueChange = { distanceInput = it },
+                        label = { Text("Jarak (Contoh: 90 km)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = timeInput,
+                        onValueChange = { timeInput = it },
+                        label = { Text("Durasi (Contoh: 2 jam)") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (titleInput.isNotBlank() && distanceInput.isNotBlank()) {
+                        tripList.add(0, TripItem(titleInput, distanceInput, if (timeInput.isBlank()) "1 jam" else timeInput))
+                        titleInput = ""
+                        distanceInput = ""
+                        timeInput = ""
+                        showAddDialog = false
+                    }
+                }) { Text("Simpan") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
+    if (selectedTrip != null) {
+        AlertDialog(
+            onDismissRequest = { selectedTrip = null },
+            title = { Text("📊 Strava Summary Card") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Rute: ${selectedTrip?.title}", fontWeight = FontWeight.Bold)
+                    Text("Jarak Tempuh: ${selectedTrip?.distance}")
+                    Text("Waktu Perjalanan: ${selectedTrip?.time}")
+                    Text("Rata-rata Kecepatan: 45 km/jam")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("✨ Created by Kang Ekie", fontSize = 12.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedTrip = null }) { Text("Tutup") }
+            }
+        )
+    }
+}
